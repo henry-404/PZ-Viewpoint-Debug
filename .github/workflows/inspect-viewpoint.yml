@@ -17,7 +17,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -33,22 +33,30 @@ jobs:
             -o Viewpoint.jar
           ls -lh Viewpoint.jar ProjectViewpointShelves.jar
 
-      - name: Inspect relevant class APIs and bytecode
+      - name: Inspect API and call sites
         shell: bash
         run: |
           mkdir -p reports
           {
-            echo "===== Viewpoint PackData API ====="
-            javap -classpath Viewpoint.jar -p -s viewpoint.render.PackData
+            echo "===== PackData declaration and constructor bytecode ====="
+            javap -classpath Viewpoint.jar -p -s -c viewpoint.render.PackData
             echo
-            echo "===== KK Shelves SharedAtlas bytecode ====="
+            echo "===== Viewpoint PackLoads call sites ====="
+            javap -classpath Viewpoint.jar -c -p -s viewpoint.packs.PackLoads
+            echo
+            echo "===== Viewpoint PackModel ====="
+            javap -classpath Viewpoint.jar -p -s viewpoint.render.PackModel
+            echo
+            echo "===== Viewpoint ObjReader ====="
+            javap -classpath Viewpoint.jar -c -p -s viewpoint.packs.ObjReader
+            echo
+            echo "===== Shelves SharedAtlas constructor call sites ====="
             javap -classpath ProjectViewpointShelves.jar -c -p -s pz.viewpointcontainers.SharedAtlas
             echo
-            echo "===== KK Shelves Main API ====="
-            javap -classpath ProjectViewpointShelves.jar -p -s pz.viewpointcontainers.Main
-            echo
-            echo "===== Matching Viewpoint classes ====="
-            jar tf Viewpoint.jar | grep -E 'viewpoint/render/PackData.class|viewpoint/packs/PackLoads.class' || true
+            echo "===== PackData references in Viewpoint classes ====="
+            for c in $(jar tf Viewpoint.jar | grep '\.class$' | sed 's#/#.#g;s#\.class$##'); do
+              javap -classpath Viewpoint.jar -c -p "$c" 2>/dev/null | grep -B 8 -A 8 'PackData."<init>"' && echo "CLASS=$c" || true
+            done
           } | tee reports/compatibility-report.txt
 
       - name: Upload text report
