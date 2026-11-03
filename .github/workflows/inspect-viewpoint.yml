@@ -1,0 +1,52 @@
+name: Inspect Viewpoint JAR compatibility
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Download Viewpoint release asset
+        run: |
+          curl -fL --retry 3 \
+            "https://github.com/henry-404/PZ-Viewpoint-Debug/releases/download/Viewpoint.jar/Viewpoint.jar" \
+            -o Viewpoint.jar
+          ls -lh Viewpoint.jar ProjectViewpointShelves.jar
+
+      - name: Inspect relevant class APIs and bytecode
+        shell: bash
+        run: |
+          mkdir -p reports
+          {
+            echo "===== Viewpoint PackData API ====="
+            javap -classpath Viewpoint.jar -p -s viewpoint.render.PackData
+            echo
+            echo "===== KK Shelves SharedAtlas bytecode ====="
+            javap -classpath ProjectViewpointShelves.jar -c -p -s pz.viewpointcontainers.SharedAtlas
+            echo
+            echo "===== KK Shelves Main API ====="
+            javap -classpath ProjectViewpointShelves.jar -p -s pz.viewpointcontainers.Main
+            echo
+            echo "===== Matching Viewpoint classes ====="
+            jar tf Viewpoint.jar | grep -E 'viewpoint/render/PackData.class|viewpoint/packs/PackLoads.class' || true
+          } | tee reports/compatibility-report.txt
+
+      - name: Upload text report
+        uses: actions/upload-artifact@v4
+        with:
+          name: viewpoint-compatibility-report
+          path: reports/compatibility-report.txt
+          retention-days: 7
