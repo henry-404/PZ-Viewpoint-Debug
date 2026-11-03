@@ -1,0 +1,63 @@
+name: Inspect Project Viewpoint compatibility
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/inspect-viewpoint.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Download release JARs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p input report
+          BASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/Viewpoint.jar"
+          curl -fL --retry 3 "$BASE/Viewpoint.jar" -o input/Viewpoint.jar
+          curl -fL --retry 3 "$BASE/ProjectViewpointShelves.jar" -o input/ProjectViewpointShelves.jar
+          sha256sum input/*.jar | tee report/SHA256SUMS.txt
+          ls -lh input | tee report/files.txt
+
+      - name: Inspect targeted classes
+        shell: bash
+        run: |
+          set -uo pipefail
+          {
+            echo "# Project Viewpoint bytecode inspection"
+            echo
+            echo "Generated: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            echo
+            for jarfile in input/*.jar; do
+              echo "## JAR: $jarfile"
+              echo
+              echo '### Relevant class entries'
+              jar tf "$jarfile" | grep -Ei '(^|/)(PackData|PackLoads|SharedAtlas|ObjReader|.*Shelf.*|.*Viewpoint.*)\.class$' | sort -u || true
+              echo
+              for cls in viewpoint.render.PackData viewpoint.packs.PackLoads viewpoint.packs.SharedAtlas viewpoint.render.ObjReader; do
+                echo "### $cls"
+                javap -classpath "$jarfile" -p -s "$cls" 2>&1 || true
+                echo
+              done
+            done
+          } | tee report/bytecode-report.md
+
+      - name: Upload compatibility report
+        uses: actions/upload-artifact@v4
+        with:
+          name: viewpoint-compatibility-report
+          path: report/
+          if-no-files-found: error
+          retention-days: 14
