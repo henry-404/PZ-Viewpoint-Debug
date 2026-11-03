@@ -1,6 +1,9 @@
 name: Inspect Viewpoint JAR compatibility
 
 on:
+  push:
+    paths:
+      - ".github/workflows/inspect-viewpoint.yml"
   workflow_dispatch:
 
 permissions:
@@ -20,9 +23,13 @@ jobs:
           java-version: '21'
 
       - name: Download Viewpoint release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           curl -fL --retry 3 \
-            "https://github.com/henry-404/PZ-Viewpoint-Debug/releases/download/Viewpoint.jar/Viewpoint.jar" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/octet-stream" \
+            "https://api.github.com/repos/henry-404/PZ-Viewpoint-Debug/releases/assets/706132008" \
             -o Viewpoint.jar
           ls -lh Viewpoint.jar ProjectViewpointShelves.jar
 
